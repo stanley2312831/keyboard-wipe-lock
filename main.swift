@@ -15,6 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     private var unlockHint: NSTextField?
 
     private var isLocked = false
+    private var globalEventMonitors: [Any] = []
+    private var localEventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -193,9 +195,85 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         unlockField = field
         unlockHint = subHint
 
+        installEventInterception()
+
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
         field.becomeFirstResponder()
+    }
+
+    private func installEventInterception() {
+        removeEventInterception()
+
+        let mask: NSEvent.EventTypeMask = [
+            .keyDown,
+            .keyUp,
+            .flagsChanged,
+            .systemDefined,
+            .leftMouseDown,
+            .leftMouseUp,
+            .rightMouseDown,
+            .rightMouseUp,
+            .otherMouseDown,
+            .otherMouseUp,
+            .mouseMoved,
+            .leftMouseDragged,
+            .rightMouseDragged,
+            .otherMouseDragged,
+            .scrollWheel,
+            .gesture,
+            .magnify,
+            .swipe,
+            .rotate,
+            .smartMagnify,
+            .quickLook,
+            .pressure,
+            .directTouch
+        ]
+
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+            guard let self else { return event }
+            guard self.isLocked else { return event }
+
+            if let panel = self.unlockPanel, let field = self.unlockField {
+                if event.type == .keyDown || event.type == .keyUp || event.type == .flagsChanged {
+                    if NSApp.keyWindow !== panel {
+                        panel.makeKeyAndOrderFront(nil)
+                        field.becomeFirstResponder()
+                    }
+                    return event
+                }
+
+                if event.window !== panel {
+                    panel.makeKeyAndOrderFront(nil)
+                    field.becomeFirstResponder()
+                    return nil
+                }
+            }
+            return event
+        }
+
+        globalEventMonitors.append(
+            NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
+                guard let self, self.isLocked else { return }
+                if let panel = self.unlockPanel, let field = self.unlockField {
+                    NSApp.activate(ignoringOtherApps: true)
+                    panel.makeKeyAndOrderFront(nil)
+                    field.becomeFirstResponder()
+                }
+            }
+        )
+    }
+
+    private func removeEventInterception() {
+        if let localEventMonitor {
+            NSEvent.removeMonitor(localEventMonitor)
+            self.localEventMonitor = nil
+        }
+        for monitor in globalEventMonitors {
+            NSEvent.removeMonitor(monitor)
+        }
+        globalEventMonitors.removeAll()
     }
 
     @objc private func unlockFromField() {
@@ -217,6 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
 
     private func exitWipeMode() {
         isLocked = false
+        removeEventInterception()
         lockWindows.forEach { $0.orderOut(nil) }
         lockWindows.removeAll()
         unlockPanel?.orderOut(nil)

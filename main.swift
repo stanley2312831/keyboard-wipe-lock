@@ -251,7 +251,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             .keyDown,
             .keyUp,
             .flagsChanged,
-            .systemDefined,
             .leftMouseDown,
             .leftMouseUp,
             .rightMouseDown,

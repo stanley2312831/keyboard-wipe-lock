@@ -5,7 +5,7 @@ private let passwordKey = "wipe_mode_password"
 private let optionTapThreshold = 5
 private let optionTapWindow: TimeInterval = 2.0
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
 
@@ -91,6 +91,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         optionWasDown = isOptionDown
     }
 
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, window == settingsWindow, !isLocked {
+            NSApp.terminate(nil)
+        }
+    }
+
     @objc private func showSettingsAction() {
         showSettings()
     }
@@ -131,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         )
         window.title = "键盘擦拭锁" 
         window.center()
+        window.delegate = self
 
         let content = NSView(frame: window.contentView!.bounds)
         content.autoresizingMask = [.width, .height]

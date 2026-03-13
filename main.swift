@@ -4,6 +4,7 @@ import ApplicationServices
 private let passwordKey = "wipe_mode_password"
 private let optionTapThreshold = 5
 private let optionTapWindow: TimeInterval = 2.0
+private let keepRunningKey = "keep_running_in_background"
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate, NSWindowDelegate {
     private var statusItem: NSStatusItem!
@@ -11,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate, N
 
     private var passwordField: NSSecureTextField!
     private var lockButton: NSButton!
+    private var keepRunningCheckbox: NSButton!
 
     private var lockWindows: [NSWindow] = []
     private var unlockPanel: NSPanel?
@@ -93,7 +95,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate, N
 
     func windowWillClose(_ notification: Notification) {
         if let window = notification.object as? NSWindow, window == settingsWindow, !isLocked {
-            NSApp.terminate(nil)
+            let keepRunning = UserDefaults.standard.bool(forKey: keepRunningKey)
+            if keepRunning {
+                settingsWindow?.orderOut(nil)
+            } else {
+                NSApp.terminate(nil)
+            }
         }
     }
 
@@ -130,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate, N
 
     private func buildSettingsWindow() -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 220),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 260),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -154,10 +161,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate, N
         content.addSubview(passwordField)
 
         let desc = NSTextField(wrappingLabelWithString: "进入擦拭模式后会全屏黑色遮罩，键盘/鼠标输入不会传给其他应用，直到输入密码解锁。快捷键：2 秒内连续按 5 下 Option。")
-        desc.frame = NSRect(x: 24, y: 64, width: 372, height: 44)
+        desc.frame = NSRect(x: 24, y: 92, width: 372, height: 44)
         desc.font = NSFont.systemFont(ofSize: 12)
         desc.textColor = .secondaryLabelColor
         content.addSubview(desc)
+
+        keepRunningCheckbox = NSButton(checkboxWithTitle: "关闭窗口后在后台运行（菜单栏常驻）", target: self, action: #selector(toggleKeepRunning))
+        keepRunningCheckbox.frame = NSRect(x: 24, y: 58, width: 320, height: 22)
+        keepRunningCheckbox.state = UserDefaults.standard.bool(forKey: keepRunningKey) ? .on : .off
+        content.addSubview(keepRunningCheckbox)
 
         lockButton = NSButton(title: "进入擦拭模式", target: self, action: #selector(enterWipeModeAction))
         lockButton.frame = NSRect(x: 260, y: 20, width: 136, height: 30)
@@ -170,6 +182,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate, N
         content.addSubview(saveButton)
 
         return window
+    }
+
+    @objc private func toggleKeepRunning() {
+        let enabled = keepRunningCheckbox.state == .on
+        UserDefaults.standard.set(enabled, forKey: keepRunningKey)
     }
 
     @objc private func savePassword() {

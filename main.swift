@@ -1,4 +1,5 @@
 import Cocoa
+import ApplicationServices
 
 private let passwordKey = "wipe_mode_password"
 private let optionTapThreshold = 5
@@ -24,10 +25,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     private var optionTapCount = 0
     private var lastOptionTapTime: TimeInterval = 0
     private var optionWasDown = false
+    private var localOptionMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         setupStatusItem()
+        requestAccessibilityPermissionIfNeeded()
         installOptionTapMonitor()
         showSettings()
     }
@@ -44,7 +47,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         statusItem.menu = menu
     }
 
+    private func requestAccessibilityPermissionIfNeeded() {
+        let options = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+    }
+
     private func installOptionTapMonitor() {
+        localOptionMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleOptionTap(event)
+            return event
+        }
+
         let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             self?.handleOptionTap(event)
         }
@@ -88,6 +101,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
 
     @objc private func quitAction() {
         NSApp.terminate(nil)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if let localOptionMonitor {
+            NSEvent.removeMonitor(localOptionMonitor)
+            self.localOptionMonitor = nil
+        }
+        for monitor in persistentGlobalMonitors {
+            NSEvent.removeMonitor(monitor)
+        }
+        persistentGlobalMonitors.removeAll()
     }
 
     private func showSettings() {

@@ -226,7 +226,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             .swipe,
             .rotate,
             .smartMagnify,
-            .quickLook,
             .pressure,
             .directTouch
         ]
@@ -253,16 +252,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             return event
         }
 
-        globalEventMonitors.append(
-            NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
-                guard let self, self.isLocked else { return }
-                if let panel = self.unlockPanel, let field = self.unlockField {
-                    NSApp.activate(ignoringOtherApps: true)
-                    panel.makeKeyAndOrderFront(nil)
-                    field.becomeFirstResponder()
-                }
+        if let gm = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
+            guard let self, self.isLocked else { return }
+            if let panel = self.unlockPanel, let field = self.unlockField {
+                NSApp.activate(ignoringOtherApps: true)
+                panel.makeKeyAndOrderFront(nil)
+                field.becomeFirstResponder()
             }
-        )
+        } {
+            globalEventMonitors.append(gm)
+        }
     }
 
     private func removeEventInterception() {

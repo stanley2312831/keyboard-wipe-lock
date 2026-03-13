@@ -1,6 +1,8 @@
 import Cocoa
 
 private let passwordKey = "wipe_mode_password"
+private let optionTapThreshold = 5
+private let optionTapWindow: TimeInterval = 2.0
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     private var statusItem: NSStatusItem!
@@ -15,12 +17,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     private var unlockHint: NSTextField?
 
     private var isLocked = false
-    private var globalEventMonitors: [Any] = []
+    private var persistentGlobalMonitors: [Any] = []
+    private var lockGlobalMonitors: [Any] = []
     private var localEventMonitor: Any?
+
+    private var optionTapCount = 0
+    private var lastOptionTapTime: TimeInterval = 0
+    private var optionWasDown = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         setupStatusItem()
+        installOptionTapMonitor()
         showSettings()
     }
 
@@ -29,11 +37,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         statusItem.button?.title = "🧽"
 
         let menu = NSMenu()
-        menu.addItem(NSMenuItem(title: "Open", action: #selector(showSettingsAction), keyEquivalent: "o"))
+        menu.addItem(NSMenuItem(title: "打开设置", action: #selector(showSettingsAction), keyEquivalent: "o"))
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Enter Wipe Mode", action: #selector(enterWipeModeAction), keyEquivalent: "l"))
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(quitAction), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "进入擦拭模式", action: #selector(enterWipeModeAction), keyEquivalent: "l"))
+        menu.addItem(NSMenuItem(title: "退出", action: #selector(quitAction), keyEquivalent: "q"))
         statusItem.menu = menu
+    }
+
+    private func installOptionTapMonitor() {
+        let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handleOptionTap(event)
+        }
+        if let monitor {
+            persistentGlobalMonitors.append(monitor)
+        }
+    }
+
+    private func handleOptionTap(_ event: NSEvent) {
+        guard !isLocked else { return }
+
+        let isOptionDown = event.modifierFlags.contains(.option)
+        let now = Date().timeIntervalSince1970
+
+        if isOptionDown && !optionWasDown {
+            if now - lastOptionTapTime > optionTapWindow {
+                optionTapCount = 1
+            } else {
+                optionTapCount += 1
+            }
+            lastOptionTapTime = now
+
+            if optionTapCount >= optionTapThreshold {
+                optionTapCount = 0
+                DispatchQueue.main.async { [weak self] in
+                    self?.enterWipeMode()
+                }
+            }
+        }
+
+        optionWasDown = isOptionDown
     }
 
     @objc private func showSettingsAction() {
@@ -63,35 +105,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Keyboard Wipe Lock"
+        window.title = "键盘擦拭锁" 
         window.center()
 
         let content = NSView(frame: window.contentView!.bounds)
         content.autoresizingMask = [.width, .height]
         window.contentView = content
 
-        let title = NSTextField(labelWithString: "Set unlock password")
+        let title = NSTextField(labelWithString: "设置解锁密码")
         title.frame = NSRect(x: 24, y: 160, width: 300, height: 24)
         title.font = NSFont.systemFont(ofSize: 16, weight: .semibold)
         content.addSubview(title)
 
         passwordField = NSSecureTextField(frame: NSRect(x: 24, y: 120, width: 372, height: 28))
-        passwordField.placeholderString = "Enter password (required)"
+        passwordField.placeholderString = "输入密码（必填）"
         passwordField.stringValue = UserDefaults.standard.string(forKey: passwordKey) ?? ""
         content.addSubview(passwordField)
 
-        let desc = NSTextField(wrappingLabelWithString: "When wipe mode is ON, a black overlay blocks the screen and keyboard/mouse input stays in this app until password unlock.")
+        let desc = NSTextField(wrappingLabelWithString: "进入擦拭模式后会全屏黑色遮罩，键盘/鼠标输入不会传给其他应用，直到输入密码解锁。快捷键：2 秒内连续按 5 下 Option。")
         desc.frame = NSRect(x: 24, y: 64, width: 372, height: 44)
         desc.font = NSFont.systemFont(ofSize: 12)
         desc.textColor = .secondaryLabelColor
         content.addSubview(desc)
 
-        lockButton = NSButton(title: "Enter Wipe Mode", target: self, action: #selector(enterWipeModeAction))
+        lockButton = NSButton(title: "进入擦拭模式", target: self, action: #selector(enterWipeModeAction))
         lockButton.frame = NSRect(x: 260, y: 20, width: 136, height: 30)
         lockButton.bezelStyle = .rounded
         content.addSubview(lockButton)
 
-        let saveButton = NSButton(title: "Save Password", target: self, action: #selector(savePassword))
+        let saveButton = NSButton(title: "保存密码", target: self, action: #selector(savePassword))
         saveButton.frame = NSRect(x: 140, y: 20, width: 110, height: 30)
         saveButton.bezelStyle = .rounded
         content.addSubview(saveButton)
@@ -102,11 +144,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     @objc private func savePassword() {
         let value = passwordField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if value.isEmpty {
-            showAlert(text: "Password cannot be empty")
+            showAlert(text: "密码不能为空")
             return
         }
         UserDefaults.standard.set(value, forKey: passwordKey)
-        showAlert(text: "Password saved")
+        showAlert(text: "密码已保存")
     }
 
     private func showAlert(text: String) {
@@ -125,7 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         guard !isLocked else { return }
         guard currentPassword() != nil else {
             showSettings()
-            showAlert(text: "Please set and save a password first.")
+            showAlert(text: "请先设置并保存密码")
             return
         }
 
@@ -158,7 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             defer: false
         )
         panel.level = .screenSaver
-        panel.title = "Wipe Mode"
+        panel.title = "擦拭模式"
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isMovable = false
         panel.standardWindowButton(.closeButton)?.isHidden = true
@@ -169,25 +211,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         content.autoresizingMask = [.width, .height]
         panel.contentView = content
 
-        let hint = NSTextField(labelWithString: "Keyboard cleaning mode is active")
+        let hint = NSTextField(labelWithString: "已进入键盘擦拭模式")
         hint.frame = NSRect(x: 20, y: 120, width: 320, height: 20)
         hint.alignment = .center
         hint.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
         content.addSubview(hint)
 
-        let subHint = NSTextField(labelWithString: "Enter password to unlock")
+        let subHint = NSTextField(labelWithString: "请输入密码解锁")
         subHint.frame = NSRect(x: 20, y: 98, width: 320, height: 16)
         subHint.alignment = .center
         subHint.textColor = .secondaryLabelColor
         content.addSubview(subHint)
 
         let field = NSSecureTextField(frame: NSRect(x: 40, y: 56, width: 280, height: 28))
-        field.placeholderString = "Password"
+        field.placeholderString = "密码"
         field.target = self
         field.action = #selector(unlockFromField)
         content.addSubview(field)
 
-        let unlock = NSButton(title: "Unlock", target: self, action: #selector(unlockAction))
+        let unlock = NSButton(title: "解锁", target: self, action: #selector(unlockAction))
         unlock.frame = NSRect(x: 140, y: 18, width: 80, height: 30)
         content.addSubview(unlock)
 
@@ -260,7 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
                 field.becomeFirstResponder()
             }
         } {
-            globalEventMonitors.append(gm)
+            lockGlobalMonitors.append(gm)
         }
     }
 
@@ -269,10 +311,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             NSEvent.removeMonitor(localEventMonitor)
             self.localEventMonitor = nil
         }
-        for monitor in globalEventMonitors {
+        for monitor in lockGlobalMonitors {
             NSEvent.removeMonitor(monitor)
         }
-        globalEventMonitors.removeAll()
+        lockGlobalMonitors.removeAll()
     }
 
     @objc private func unlockFromField() {
@@ -286,7 +328,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         if input == expected {
             exitWipeMode()
         } else {
-            unlockHint?.stringValue = "Wrong password"
+            unlockHint?.stringValue = "密码错误"
             unlockHint?.textColor = .systemRed
             unlockField?.stringValue = ""
         }

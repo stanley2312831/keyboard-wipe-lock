@@ -16,5 +16,8 @@ lipo -create -output "$MACOS_DIR/$APP_NAME" "$BUILD_DIR/${APP_NAME}-arm64" "$BUI
 chmod +x "$MACOS_DIR/$APP_NAME"
 
 cp Info.plist "$APP_DIR/Contents/Info.plist"
+if [ -f "build/AppIcon.icns" ]; then
+  cp "build/AppIcon.icns" "$RES_DIR/AppIcon.icns"
+fi
 
 echo "Built: $APP_DIR"

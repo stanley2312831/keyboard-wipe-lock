@@ -18,6 +18,9 @@ jobs:
 
       - name: Build app + dmg
         run: |
+          mkdir -p build
+          swift scripts/generate_icon.swift
+          iconutil -c icns build/AppIcon.iconset -o build/AppIcon.icns
           chmod +x build_app.sh make_dmg.sh
           VERSION="${GITHUB_REF_NAME#v}"
           if [ -z "$VERSION" ] || [ "$VERSION" = "$GITHUB_REF_NAME" ]; then VERSION="dev"; fi

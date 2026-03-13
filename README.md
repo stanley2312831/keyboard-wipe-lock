@@ -1,41 +1,42 @@
-# KeyboardWipeLock (macOS)
+# 键盘擦拭锁（KeyboardWipeLock）
 
-A tiny macOS utility for keyboard cleaning mode:
+macOS 键盘清洁模式小工具：
 
-- Enter **Wipe Mode** to black out screen with top-level overlay windows.
-- Keep keyboard/mouse input inside this app while active.
-- Only unlock with your configured password.
+- 一键进入 **擦拭模式**：全屏黑色遮罩。
+- 擦拭模式下，键盘/鼠标事件不传给其他应用。
+- 只有输入你设置的密码才能解锁恢复。
+- 快捷键：**2 秒内连续按 5 下 Option** 进入擦拭模式。
 
-## Notes
+## 说明
 
-- This is a user-space app. It does **not physically power off** your monitor.
-- It provides a black full-screen overlay and active-app input capture behavior.
+- 这是用户态应用，不会物理关闭显示器电源。
+- 通过“黑屏遮罩 + 输入锁定”达到防误触效果。
 
-## Local build
+## 本地构建
 
 ```bash
 chmod +x build_app.sh make_dmg.sh
 ./build_app.sh
-./make_dmg.sh 1.0.0
+./make_dmg.sh 1.1.0
 ```
 
-Outputs:
+输出：
 
 - `build/KeyboardWipeLock.app`
-- `build/KeyboardWipeLock-1.0.0.dmg`
+- `build/KeyboardWipeLock-1.1.0.dmg`
 
 ## GitHub Actions
 
-Workflow: `.github/workflows/build-dmg.yml`
+工作流：`.github/workflows/build-dmg.yml`
 
-- Trigger manually (`workflow_dispatch`) or by tag push (`v*`).
-- Uploads DMG as an artifact.
-- On tag push, also creates a GitHub Release and attaches DMG.
+- 手动触发（workflow_dispatch）或打 tag（`v*`）触发。
+- 自动生成图标并打包 DMG。
+- tag 触发时会自动创建 Release 并上传 DMG。
 
-## Usage
+## 使用
 
-1. Launch app
-2. Set password and click **Save Password**
-3. Click **Enter Wipe Mode**
-4. Clean keyboard
-5. Enter password in unlock panel
+1. 启动 App
+2. 输入密码并点击 **保存密码**
+3. 点击 **进入擦拭模式**（或 2 秒内连按 5 次 Option）
+4. 清洁键盘
+5. 输入密码并点 **解锁** 退出
